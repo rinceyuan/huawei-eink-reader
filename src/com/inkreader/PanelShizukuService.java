@@ -75,7 +75,7 @@ public final class PanelShizukuService extends Binder {
         }
         data.enforceInterface(TOKEN);
         if (code == 1) {
-            start();
+            start(data.readInt());
             reply.writeNoException();
             return true;
         }
@@ -95,7 +95,8 @@ public final class PanelShizukuService extends Binder {
             String panelType = data.readString();
             int powerMs = data.readInt();
             int pollMs = data.readInt();
-            submit(operation, id, image, panelType, powerMs, pollMs);
+            int holdMs = data.readInt();
+            submit(operation, id, image, panelType, powerMs, pollMs, holdMs);
             reply.writeNoException();
             return true;
         }
@@ -104,7 +105,12 @@ public final class PanelShizukuService extends Binder {
         return true;
     }
 
-    private void start() {
+    private void start(int holdMs) {
+        if (holdMs != 0 && (holdMs < 1000 || holdMs > 30000)) {
+            throw new IllegalArgumentException("保场参数错误");
+        }
+        // The system presence check would interrupt a dry hold, so delay it past the hold.
+        int presenceMs = holdMs > 0 ? holdMs + 10000 : 5000;
         synchronized (lock) {
             if (active) throw new IllegalStateException("水墨屏会话已启动");
             logs.setLength(0);
@@ -121,7 +127,8 @@ public final class PanelShizukuService extends Binder {
                 ProcessBuilder builder = new ProcessBuilder(
                         "/system/bin/app_process", "/system/bin",
                         "org.nfcresearch.qpolllab.ReaderPanelWorker",
-                        "45", stopFile.getAbsolutePath(), workDir.getAbsolutePath())
+                        "45", stopFile.getAbsolutePath(), workDir.getAbsolutePath(),
+                        Integer.toString(presenceMs))
                         .redirectErrorStream(true);
                 builder.environment().put("CLASSPATH", apk);
                 child = builder.start();
@@ -158,7 +165,7 @@ public final class PanelShizukuService extends Binder {
     }
 
     private void submit(int operation, String id, byte[] image, String panelType,
-                        int powerMs, int pollMs) {
+                        int powerMs, int pollMs, int holdMs) {
         if (operation != 1 && operation != 2) throw new IllegalArgumentException("操作类型错误");
         if (id == null || id.isEmpty() || id.length() > 48) throw new IllegalArgumentException("命令编号错误");
         if (image == null || image.length != 105984) throw new IllegalArgumentException("图像长度错误");
@@ -166,7 +173,8 @@ public final class PanelShizukuService extends Binder {
             throw new IllegalArgumentException("屏幕型号错误");
         }
         if (powerMs < 100 || powerMs > 12700 || powerMs % 100 != 0
-                || pollMs < 0 || pollMs > 500) {
+                || pollMs < 0 || pollMs > 500
+                || (holdMs != 0 && (holdMs < 1000 || holdMs > 30000))) {
             throw new IllegalArgumentException("刷新参数错误");
         }
         synchronized (lock) {
@@ -182,7 +190,7 @@ public final class PanelShizukuService extends Binder {
                 commands.write((operation == 1 ? "PRELOAD" : "ADVANCE")
                         + "\t" + id + "\t" + imageFile.getAbsolutePath()
                         + "\t" + sha + "\t" + panelType
-                        + "\t" + powerMs + "\t" + pollMs + "\n");
+                        + "\t" + powerMs + "\t" + pollMs + "\t" + holdMs + "\n");
                 commands.flush();
             } catch (Exception error) {
                 throw new IllegalStateException("发送面板命令失败：" + error);

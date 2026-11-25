@@ -503,7 +503,8 @@ public final class ReaderActivity extends Activity implements PanelClient.Listen
         panelStatus.setText("正在准备 NFC 传输");
         panelClient = new PanelClient(this, this, panelType,
                 Ui.prefs(this).getInt("panel-power-ms", 2000),
-                Ui.prefs(this).getInt("panel-poll-ms", 100));
+                Ui.prefs(this).getInt("panel-poll-ms", 100),
+                Ui.prefs(this).getBoolean("panel-dry-hold", false) ? 20000 : 0);
         panelClient.start();
     }
 

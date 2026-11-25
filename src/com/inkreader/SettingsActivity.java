@@ -224,6 +224,15 @@ public final class SettingsActivity extends Activity {
             }
         });
         body.addView(panel);
+        CheckBox dryHold = new CheckBox(this);
+        dryHold.setText("刷新时不查询忙状态（保场 20 秒）");
+        dryHold.setChecked(prefs.getBoolean("panel-dry-hold", false));
+        dryHold.setOnCheckedChangeListener((button, checked) ->
+                prefs.edit().putBoolean("panel-dry-hold", checked).apply());
+        body.addView(dryHold);
+        TextView dryHoldHint = Ui.text(this, 13, Ui.themeMuted(this), false);
+        dryHoldHint.setText("小米等 NXP SN220 机型刷新中途报 TagLostException 时开启：D4 后 20 秒内不发任何指令，只保持供能。");
+        body.addView(dryHoldHint);
         Button check = Ui.button(this, "检查 Shizuku 与 NFC");
         check.setOnClickListener(v -> checkShizuku());
         body.addView(check);

@@ -14,7 +14,7 @@ public final class ProtocolTest {
     interface Action {void run()throws Exception;}
     static void rejects(Action action,String message)throws Exception{try{action.run();throw new AssertionError("Expected rejection: "+message);}catch(AssertionError e){throw e;}catch(Exception expected){}}
     static final class Fake implements PanelProtocol.Control,PanelProtocol.Transport {
-        long time,cancelAt=-1;int d3,d4,de,pin,d8,d1,failD3=-1,cancelAtD3=-1,pollMs=500,deLatencyMs;
+        long time,cancelAt=-1;int d3,d4,de,pin,d8,d1,failD3=-1,cancelAtD3=-1,pollMs=500,deLatencyMs,d4Busy;
         boolean authNeeded,failPin,failD4,noBusy,foreverBusy,malformedBusy,cancel,cancelBeforeD4,cancelWhilePolling;
         byte[] info=INFO;
         ArrayList<String> events=new ArrayList<>();ArrayList<byte[]> uploads=new ArrayList<>();
@@ -29,7 +29,7 @@ public final class ProtocolTest {
                 case 0xD8:d8++;return authNeeded&&pin==0?PanelProtocol.hex("6985"):OK;
                 case 0x20:pin++;eq(PanelProtocol.toHex(cmd).equals("00200001055265699919"),"published PIN APDU");return failPin?PanelProtocol.hex("63C2"):OK;
                 case 0xD3:d3++;uploads.add(cmd.clone());if(d3==cancelAtD3)cancel=true;return d3==failD3?PanelProtocol.hex("6995"):OK;
-                case 0xD4:d4++;eq(PanelProtocol.toHex(cmd).equals("F0D4948000"),"D4 power timing");return failD4?PanelProtocol.hex("6502"):OK;
+                case 0xD4:d4++;eq(PanelProtocol.toHex(cmd).equals("F0D4948000"),"D4 power timing");if(d4<=d4Busy)return PanelProtocol.hex("6986");return failD4?PanelProtocol.hex("6502"):OK;
                 case 0xDE:deTimes.add(time);time+=deLatencyMs;de++;if(malformedBusy)return PanelProtocol.hex("029000");return PanelProtocol.hex((foreverBusy||(!noBusy&&de<=2))?"019000":"009000");
                 default:throw new AssertionError("Unexpected command: "+PanelProtocol.toHex(cmd));
             }
@@ -47,6 +47,9 @@ public final class ProtocolTest {
     }
     public static void main(String[] args)throws Exception{
         PanelProtocol.parseInfo(INFO);passed("synthetic D1 exact profile");
+        PanelProtocol.parseInfo(PanelProtocol.hex(PanelProtocol.toHex(INFO).replace("C004201EA001","C00400000001")));
+        rejects(()->PanelProtocol.parseInfo(PanelProtocol.hex(PanelProtocol.toHex(INFO).replace("C004201EA001","C00400000002"))),"unregistered APPID");
+        passed("both registered FMSC APPIDs accepted, others rejected");
         eq(PanelProtocol.parseInfo(withUid(PanelProtocol.hex("12345678"))).uid.equals("12345678"),"different UID is display only");
         eq(PanelProtocol.parseInfo(withUid(PanelProtocol.hex("01020304050607"))).uid.equals("01020304050607"),"no UID length restriction");
         eq(PanelProtocol.parseInfo(withUid(null)).uid.equals("未提供"),"UID field is optional");passed("different, longer and absent UID accepted without ID validation");

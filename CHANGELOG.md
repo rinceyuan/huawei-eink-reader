@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Accept the second registered FMSC APPID `00000001` in the D1 C0 check.
+- Optional dry-hold refresh: after D4, keep the field for 20 s without DE
+  polling and delay the system presence check past the hold (for NXP SN220
+  phones that lose the tag during refresh). D4 is resent on `6986`.
+
 ## 0.3.9
 
 - Final usable baseline for the Huawei 552x768 four-color NFC e-ink case.

@@ -77,9 +77,11 @@ public final class ReaderPanelWorker {
                 1, 15, 112, new byte[]{0x31, (byte) action});
     }
 
+    private static int presenceMs = 5000;
+
     private static void reader(int flags) throws Exception {
         Bundle extras = new Bundle();
-        extras.putInt("presence", 5000);
+        extras.putInt("presence", presenceMs);
         invoke("setReaderMode", new Class<?>[]{IBinder.class,
                         Class.forName("android.nfc.IAppCallback"), int.class, Bundle.class, String.class},
                 token, callback(), flags, extras,
@@ -147,11 +149,14 @@ public final class ReaderPanelWorker {
     public static void main(String[] args) {
         int exit = 0;
         try {
-            if (args.length != 3) throw new IllegalArgumentException("参数数量错误");
+            if (args.length != 4) throw new IllegalArgumentException("参数数量错误");
             int scanSeconds = Integer.parseInt(args[0]);
             File stop = new File(args[1]).getCanonicalFile();
             File root = new File(args[2]).getCanonicalFile();
             if (!root.isDirectory()) throw new IllegalArgumentException("临时目录不存在");
+            presenceMs = Integer.parseInt(args[3]);
+            if (presenceMs < 1000 || presenceMs > 60000) throw new IllegalArgumentException("presence 参数错误");
+            emit("PRESENCE", "系统在位检查间隔=" + presenceMs + " ms");
             init();
             qtagTouched = true;
             int status = qtag(1);
@@ -207,7 +212,7 @@ public final class ReaderPanelWorker {
                     if (line.trim().isEmpty()) continue;
                     String[] parts = line.split("\\t", -1);
                     if ("STOP".equals(parts[0])) break;
-                    if (parts.length != 7
+                    if (parts.length != 8
                             || (!"PRELOAD".equals(parts[0]) && !"ADVANCE".equals(parts[0]))) {
                         emit("ERROR", "无效命令");
                         break;
@@ -217,6 +222,7 @@ public final class ReaderPanelWorker {
                     String expectedSha = parts[3];
                     int powerMs = Integer.parseInt(parts[5]);
                     int pollMs = Integer.parseInt(parts[6]);
+                    int holdMs = Integer.parseInt(parts[7]);
                     if (!isInside(root, imageFile)) throw new SecurityException("图像路径越界");
                     byte[] image = readImage(imageFile);
                     String actualSha = hex(MessageDigest.getInstance("SHA-256").digest(image));
@@ -238,7 +244,8 @@ public final class ReaderPanelWorker {
                         emit("FAST_TURN", fast
                                 ? "预传命中，使用 " + refreshPowerMs + " ms 快速 D4"
                                 : "预传未命中，完整传输后使用 " + refreshPowerMs + " ms D4");
-                        protocol.refresh(refreshPowerMs, refreshPollMs);
+                        if (holdMs > 0) protocol.refreshHold(refreshPowerMs, holdMs);
+                        else protocol.refresh(refreshPowerMs, refreshPollMs);
                         lastSha = null;
                         emit("ADVANCED", id + "|" + actualSha + "|" + (fast ? "1" : "0")
                                 + "|" + (SystemClock.elapsedRealtime() - started));

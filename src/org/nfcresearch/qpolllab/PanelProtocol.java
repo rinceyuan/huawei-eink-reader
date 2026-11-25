@@ -79,7 +79,9 @@ public final class PanelProtocol {
             if(actual==null||actual.length==0)continue;
             boolean matches=tags[i]==0xD1?actual[0]==1:Arrays.equals(actual,expected[i]);
             if(tags[i]==0xA1&&Arrays.equals(actual,hex("01120030FFFFFF")))matches=true;
-            if(!matches)mismatch.append(String.format("\n%02X%s：期望=%s，实际=%s",tags[i],tags[i]==0xD1?" 首字节":"",toHex(expected[i]),toHex(actual)));
+            // solar2ain device.py registers both FMSC APPIDs for Huawei boards.
+            if(tags[i]==0xC0&&Arrays.equals(actual,hex("00000001")))matches=true;
+            if(!matches)mismatch.append(String.format("\n%02X%s：期望=%s，实际=%s",tags[i],tags[i]==0xD1?" 首字节":"",tags[i]==0xC0?"201EA001 或 00000001":toHex(expected[i]),toHex(actual)));
         }
         if(mismatch.length()>0)
             throw new IllegalArgumentException("目标配置与已验证的原厂扫描配置不匹配；不会改写 DB/DA"+mismatch);
@@ -322,6 +324,32 @@ public final class PanelProtocol {
             pause(pollMs);
         }
         throw new IllegalStateException("刷新状态等待超过 90 秒；未自动重发 D4");
+    }
+
+    public static final int MAX_HOLD_MS=30000;
+
+    /**
+     * Starts refresh, then keeps the field up without sending any APDU. On some
+     * controllers (e.g. NXP SN220) DE traffic during the waveform drops the tag.
+     */
+    public boolean refreshHold(int powerMs,int holdMs) throws Exception {
+        if(!prepared)throw new IllegalStateException("面板会话尚未准备");
+        if(holdMs<1000||holdMs>MAX_HOLD_MS)throw new IllegalArgumentException("保场时间必须为 1–30 秒");
+        byte[] refresh=d4(powerMs);
+        control.event("STAGE","refreshing|预传完成，正在启动屏幕刷新");
+        control.check();
+        int sw=0;
+        for(int attempt=1;attempt<=3;attempt++) {
+            sw=status(exchange(refresh,"D4 刷新（上电等待 "+powerMs+" ms）",8000,false));
+            if(sw!=0x6986)break;
+            control.event("BUSY","屏幕报告 6986，1 秒后重发 D4");
+            pause(1000);
+        }
+        if(sw!=0x9000)throw new IllegalArgumentException(String.format("D4 刷新：SW=%04X（%s）",sw,meaning(sw)));
+        control.event("STAGE","polling|保持贴合供能，屏幕刷新中（"+holdMs/1000+" 秒内不查询忙状态）");
+        pause(holdMs);
+        control.event("REFRESH_DONE","已保场 "+holdMs/1000+" 秒且未查询 DE，请目视确认画面");
+        return true;
     }
 
     /** Original one-shot behavior retained for compatibility with the upstream tests/tooling. */
