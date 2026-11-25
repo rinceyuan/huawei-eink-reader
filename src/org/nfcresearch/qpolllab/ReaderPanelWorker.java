@@ -39,6 +39,8 @@ public final class ReaderPanelWorker {
     private static volatile Tag detectedTag;
     private static volatile IsoDep current;
     private static final int MAX_RECONNECTS = 2;
+    private static final int MAX_CHARGES = 3;
+    private static final long CHARGE_MS = 10000;
     private static int discoveredCode;
     private static Object callbackProxy;
     private static boolean readerTouched;
@@ -236,13 +238,20 @@ public final class ReaderPanelWorker {
                     }
                     long started = SystemClock.elapsedRealtime();
                     boolean relink = false;
-                    for (int attempt = 0; ; attempt++) {
+                    boolean unprepared = false;
+                    int relinks = 0;
+                    int charges = 0;
+                    while (true) {
                         try {
                             if (relink) {
                                 reconnect(stop);
+                                relink = false;
+                                unprepared = true;
+                            }
+                            if (unprepared) {
                                 protocol.prepare();
                                 lastSha = null;
-                                relink = false;
+                                unprepared = false;
                             }
                             if ("PRELOAD".equals(parts[0])) {
                                 protocol.writeImage(image);
@@ -267,10 +276,22 @@ public final class ReaderPanelWorker {
                         } catch (IOException lost) {
                             // After a refresh some boards stop answering on the old link;
                             // re-discover instead of ending the session and cutting the field.
-                            if (holdMs <= 0 || attempt >= MAX_RECONNECTS) throw lost;
+                            if (holdMs <= 0 || relinks >= MAX_RECONNECTS) throw lost;
+                            relinks++;
                             emit("STAGE", "reconnecting|墨水屏连接中断，正在重新连接（第 "
-                                    + (attempt + 1) + " 次）");
+                                    + relinks + " 次）");
                             relink = true;
+                        } catch (PanelProtocol.LowPowerException weak) {
+                            // A refresh drains the board; keeping the field on recharges it.
+                            if (holdMs <= 0 || charges >= MAX_CHARGES) throw weak;
+                            charges++;
+                            emit("STAGE", "charging|墨水屏供能不足，保持贴合充能 "
+                                    + CHARGE_MS / 1000 + " 秒后重试（第 " + charges + " 次）");
+                            long until = SystemClock.elapsedRealtime() + CHARGE_MS;
+                            while (SystemClock.elapsedRealtime() < until) {
+                                if (stop.exists()) throw new InterruptedException("用户停止");
+                                SystemClock.sleep(100);
+                            }
                         }
                     }
                     imageFile.delete();

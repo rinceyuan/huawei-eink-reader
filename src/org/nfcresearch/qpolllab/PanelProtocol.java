@@ -52,9 +52,18 @@ public final class PanelProtocol {
             default:return "设备返回错误";
         }
     }
+    /** The panel reported that its supply is too low; it may recover after charging in the field. */
+    public static final class LowPowerException extends IllegalArgumentException {
+        LowPowerException(String message){super(message);}
+    }
+    static boolean isLowPower(int sw){return sw==0x6502||sw==0x68CA||sw==0x698A;}
     public static byte[] requireOk(byte[] response,String label) {
         int sw=status(response);
-        if(sw!=0x9000)throw new IllegalArgumentException(label+"：SW="+String.format("%04X",sw)+"（"+meaning(sw)+"），已停止，不重发");
+        if(sw!=0x9000) {
+            String message=label+"：SW="+String.format("%04X",sw)+"（"+meaning(sw)+"），已停止，不重发";
+            if(isLowPower(sw))throw new LowPowerException(message);
+            throw new IllegalArgumentException(message);
+        }
         return Arrays.copyOf(response,response.length-2);
     }
     public static Info parseInfo(byte[] response) {
@@ -345,7 +354,11 @@ public final class PanelProtocol {
             control.event("BUSY","屏幕报告 6986，1 秒后重发 D4");
             pause(1000);
         }
-        if(sw!=0x9000)throw new IllegalArgumentException(String.format("D4 刷新：SW=%04X（%s）",sw,meaning(sw)));
+        if(sw!=0x9000) {
+            String message=String.format("D4 刷新：SW=%04X（%s）",sw,meaning(sw));
+            if(isLowPower(sw))throw new LowPowerException(message);
+            throw new IllegalArgumentException(message);
+        }
         control.event("STAGE","polling|保持贴合供能，屏幕刷新中（"+holdMs/1000+" 秒内不查询忙状态）");
         pause(holdMs);
         control.event("REFRESH_DONE","已保场 "+holdMs/1000+" 秒且未查询 DE，请目视确认画面");

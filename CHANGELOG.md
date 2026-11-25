@@ -8,7 +8,8 @@
   phones that lose the tag during refresh). D4 is resent on `6986`.
 - In dry-hold mode, a command that fails because the link dropped waits for
   the panel to be re-discovered, re-runs the D1/D8 checks and retries
-  (up to 2 times) instead of ending the session.
+  (up to 2 times) instead of ending the session. Low-voltage status words
+  (6502/68CA/698A) wait 10 s in the field and retry (up to 3 times).
 - Reading background defaults to following the system dark mode; native
   widgets and dialogs use a matching dark theme.
 - Buttons keep an 8 dp visual gap between neighbours.

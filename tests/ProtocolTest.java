@@ -50,6 +50,9 @@ public final class ProtocolTest {
         PanelProtocol.parseInfo(PanelProtocol.hex(PanelProtocol.toHex(INFO).replace("C004201EA001","C00400000001")));
         rejects(()->PanelProtocol.parseInfo(PanelProtocol.hex(PanelProtocol.toHex(INFO).replace("C004201EA001","C00400000002"))),"unregistered APPID");
         passed("both registered FMSC APPIDs accepted, others rejected");
+        for(String sw:new String[]{"6502","68CA","698A"}){try{PanelProtocol.requireOk(PanelProtocol.hex(sw),"D3");throw new AssertionError("accepted "+sw);}catch(PanelProtocol.LowPowerException expected){}}
+        try{PanelProtocol.requireOk(PanelProtocol.hex("6995"),"D3");throw new AssertionError("accepted 6995");}catch(PanelProtocol.LowPowerException e){throw new AssertionError("6995 is not low power");}catch(IllegalArgumentException expected){}
+        passed("low-voltage status words are distinguishable for recharge retries");
         eq(PanelProtocol.parseInfo(withUid(PanelProtocol.hex("12345678"))).uid.equals("12345678"),"different UID is display only");
         eq(PanelProtocol.parseInfo(withUid(PanelProtocol.hex("01020304050607"))).uid.equals("01020304050607"),"no UID length restriction");
         eq(PanelProtocol.parseInfo(withUid(null)).uid.equals("未提供"),"UID field is optional");passed("different, longer and absent UID accepted without ID validation");
