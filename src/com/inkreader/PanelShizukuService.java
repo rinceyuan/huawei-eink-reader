@@ -27,7 +27,6 @@ public final class PanelShizukuService extends Binder {
     private final Object lock = new Object();
     private final StringBuilder logs = new StringBuilder();
     private final int appUid;
-    private final String apk;
     private volatile boolean active;
     private volatile Process child;
     private volatile BufferedWriter commands;
@@ -38,6 +37,10 @@ public final class PanelShizukuService extends Binder {
     public PanelShizukuService() throws Exception {
         int uid = android.os.Process.myUid();
         if (uid != 0 && uid != 2000) throw new SecurityException("需要 Shizuku 或 Root");
+        appUid = applicationInfo().uid;
+    }
+
+    private static ApplicationInfo applicationInfo() throws Exception {
         Object pm = Class.forName("android.app.ActivityThread")
                 .getMethod("getPackageManager").invoke(null);
         ApplicationInfo info = (ApplicationInfo) Class.forName(
@@ -45,8 +48,7 @@ public final class PanelShizukuService extends Binder {
                 .getMethod("getApplicationInfo", String.class, long.class, int.class)
                 .invoke(pm, PACKAGE, 0L, 0);
         if (info == null) throw new IllegalStateException("应用包不存在");
-        appUid = info.uid;
-        apk = info.sourceDir;
+        return info;
     }
 
     private void log(String line) {
@@ -130,7 +132,8 @@ public final class PanelShizukuService extends Binder {
                         "45", stopFile.getAbsolutePath(), workDir.getAbsolutePath(),
                         Integer.toString(presenceMs))
                         .redirectErrorStream(true);
-                builder.environment().put("CLASSPATH", apk);
+                // Resolve per session: a reinstall moves the APK while this service may survive.
+                builder.environment().put("CLASSPATH", applicationInfo().sourceDir);
                 child = builder.start();
                 commands = new BufferedWriter(new OutputStreamWriter(
                         child.getOutputStream(), StandardCharsets.UTF_8));
