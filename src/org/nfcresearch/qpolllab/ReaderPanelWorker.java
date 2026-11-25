@@ -336,7 +336,9 @@ public final class ReaderPanelWorker {
             if (old != null) old.close();
         } catch (Exception ignored) {
         }
-        if (!awaitDiscovery(stop, seen, 20000)) {
+        // After a timeout the stack resumes default polling without Q-Poll, so the panel
+        // is rarely re-found on its own; restart reader mode quickly to restore Q-Poll.
+        if (!awaitDiscovery(stop, seen, 3000)) {
             emit("STAGE", "reconnecting|未自动重新发现，重启寻卡");
             reader(0);
             SystemClock.sleep(200);
