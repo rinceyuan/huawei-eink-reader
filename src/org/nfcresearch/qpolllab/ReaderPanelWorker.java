@@ -41,6 +41,8 @@ public final class ReaderPanelWorker {
     private static final int MAX_RECONNECTS = 2;
     private static final int MAX_CHARGES = 3;
     private static final long CHARGE_MS = 10000;
+    private static final long FIELD_OFF_MS = 1000;
+    private static boolean roundEnded;
     private static int discoveredCode;
     private static Object callbackProxy;
     private static boolean readerTouched;
@@ -237,7 +239,10 @@ public final class ReaderPanelWorker {
                         break;
                     }
                     long started = SystemClock.elapsedRealtime();
-                    boolean relink = false;
+                    // On SN220-class phones the panel stops answering after a refresh; each new
+                    // round starts from a fully cycled field (as qpoll-lite does on Android 16+).
+                    boolean relink = holdMs > 0 && roundEnded;
+                    roundEnded = false;
                     boolean unprepared = false;
                     int relinks = 0;
                     int charges = 0;
@@ -266,8 +271,10 @@ public final class ReaderPanelWorker {
                                 emit("FAST_TURN", fast
                                         ? "预传命中，使用 " + refreshPowerMs + " ms 快速 D4"
                                         : "预传未命中，完整传输后使用 " + refreshPowerMs + " ms D4");
-                                if (holdMs > 0) protocol.refreshHold(refreshPowerMs, holdMs);
-                                else protocol.refresh(refreshPowerMs, refreshPollMs);
+                                if (holdMs > 0) {
+                                    protocol.refreshHold(refreshPowerMs, holdMs);
+                                    roundEnded = true;
+                                } else protocol.refresh(refreshPowerMs, refreshPollMs);
                                 lastSha = null;
                                 emit("ADVANCED", id + "|" + actualSha + "|" + (fast ? "1" : "0")
                                         + "|" + (SystemClock.elapsedRealtime() - started));
@@ -325,27 +332,32 @@ public final class ReaderPanelWorker {
     }
 
     /**
-     * Waits for the still-active reader mode to re-discover the panel. Reader mode is
-     * only cycled as a fallback, because dropping the field can interrupt a refresh.
+     * Drops the field completely (reader mode and Q-Poll), then raises it again with
+     * Q-Poll first and reader mode second, and waits for the panel. Only called after a
+     * refresh round has finished or the link was already lost.
      */
     private static void reconnect(File stop) throws Exception {
         IsoDep old = current;
         current = null;
-        int seen = discoveries.get();
         try {
             if (old != null) old.close();
         } catch (Exception ignored) {
         }
-        // After a timeout the stack resumes default polling without Q-Poll, so the panel
-        // is rarely re-found on its own; restart reader mode quickly to restore Q-Poll.
-        if (!awaitDiscovery(stop, seen, 3000)) {
-            emit("STAGE", "reconnecting|未自动重新发现，重启寻卡");
-            reader(0);
-            SystemClock.sleep(200);
-            reader(0x81);
-            if (!awaitDiscovery(stop, seen, 15000)) {
-                throw new IllegalStateException("墨水屏连接中断后未能重新发现；请保持贴合后重新连接");
-            }
+        emit("STAGE", "reconnecting|断开射频场，重新供能并寻找墨水屏");
+        reader(0);
+        int off = qtag(0);
+        if (off != 0) emit("QTAG_OFF_FAILED", "关闭 QTag，API 状态=" + off);
+        long until = SystemClock.elapsedRealtime() + FIELD_OFF_MS;
+        while (SystemClock.elapsedRealtime() < until) {
+            if (stop.exists()) throw new InterruptedException("用户停止");
+            SystemClock.sleep(50);
+        }
+        int seen = discoveries.get();
+        int on = qtag(1);
+        if (on != 0) throw new IllegalStateException("QTag 重新启用失败，API 状态=" + on);
+        reader(0x81);
+        if (!awaitDiscovery(stop, seen, 15000)) {
+            throw new IllegalStateException("重新供能后未发现墨水屏；请保持贴合后重新连接");
         }
         connect(detectedTag);
     }

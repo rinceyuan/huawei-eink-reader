@@ -234,7 +234,7 @@ public final class SettingsActivity extends Activity {
                 prefs.edit().putBoolean("panel-dry-hold", checked).apply());
         body.addView(dryHold);
         TextView dryHoldHint = Ui.text(this, 13, Ui.themeMuted(this), false);
-        dryHoldHint.setText("小米等 NXP SN220 机型刷新中途报 TagLostException 时开启：D4 后 30 秒内不发任何指令，只保持供能；之后若连接中断会自动重新连接。");
+        dryHoldHint.setText("小米等 NXP SN220 机型刷新中途报 TagLostException 时开启：D4 使用 500 ms 上电等待，之后 30 秒内不发任何指令，只保持供能；每次翻页先完全断开射频场再重新供能并完整传输，不再预传。");
         body.addView(dryHoldHint);
         Button check = Ui.button(this, "检查 Shizuku 与 NFC");
         check.setOnClickListener(v -> checkShizuku());

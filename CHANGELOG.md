@@ -10,6 +10,10 @@
   the panel to be re-discovered, re-runs the D1/D8 checks and retries
   (up to 2 times) instead of ending the session. Low-voltage status words
   (6502/68CA/698A) wait 10 s in the field and retry (up to 3 times).
+- Dry-hold mode follows qpoll-lite's Android 16+ / SN220U path: 500 ms D4
+  power-up, no preloading, and each page turn fully drops the field
+  (ReaderMode and QTag off for 1 s) before re-raising it QTag-first and
+  sending the full frame.
 - Reading background defaults to following the system dark mode; native
   widgets and dialogs use a matching dark theme.
 - Buttons keep an 8 dp visual gap between neighbours.

@@ -58,6 +58,7 @@ public final class ReaderActivity extends Activity implements PanelClient.Listen
     private int displayedEInkPage = -1;
     private boolean advanceBusy;
     private boolean preloadBusy;
+    private boolean dryHold;
     private EInkPageRenderer.Snapshot nextSnapshot;
     private int nextSnapshotPage = -1;
     private boolean nextPreloaded;
@@ -504,10 +505,12 @@ public final class ReaderActivity extends Activity implements PanelClient.Listen
         if (panelClient != null) return;
         resetPanelTransferState();
         panelStatus.setText("正在准备 NFC 传输");
+        dryHold = Ui.prefs(this).getBoolean("panel-dry-hold", false);
         panelClient = new PanelClient(this, this, panelType,
-                Ui.prefs(this).getInt("panel-power-ms", 2000),
+                // Dry hold follows the 500 ms power-up used by the reference tools.
+                dryHold ? 500 : Ui.prefs(this).getInt("panel-power-ms", 2000),
                 Ui.prefs(this).getInt("panel-poll-ms", 100),
-                Ui.prefs(this).getBoolean("panel-dry-hold", false) ? 30000 : 0);
+                dryHold ? 30000 : 0);
         panelClient.start();
     }
 
@@ -550,6 +553,12 @@ public final class ReaderActivity extends Activity implements PanelClient.Listen
     private void schedulePreload(int page) {
         if (panelClient == null || eInkPages == null || !pageReady || preloadBusy) return;
         if (page < 0 || page >= eInkPages.pageCount()) return;
+        if (dryHold) {
+            // The panel must be left alone after a refresh; only render ahead locally.
+            renderNextAhead(page);
+            panelStatus.setText("当前页已刷新 · 翻页时重新供能并完整传输");
+            return;
+        }
         if (nextSnapshot != null && nextSnapshotPage == page) {
             preloadBusy = true;
             expectedPreloadPage = page;
