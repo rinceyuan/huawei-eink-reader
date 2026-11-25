@@ -219,7 +219,9 @@ public final class ReaderActivity extends Activity implements PanelClient.Listen
         panelButton = Ui.primaryButton(this, "连接水墨屏");
         panelButton.setOnClickListener(v -> {
             if (panelClient == null) startPanel();
-            else setDarkMode(!darkMode);
+            else if (!pageReady && !darkMode) {
+                Toast.makeText(this, "正在连接水墨屏，请保持贴合", Toast.LENGTH_SHORT).show();
+            } else setDarkMode(!darkMode);
         });
         nav.addView(panelButton, new LinearLayout.LayoutParams(0,
                 ViewGroup.LayoutParams.WRAP_CONTENT, 1.25f));

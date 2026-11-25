@@ -13,6 +13,10 @@
 - Reading background defaults to following the system dark mode; native
   widgets and dialogs use a matching dark theme.
 - Buttons keep an 8 dp visual gap between neighbours.
+- The system navigation buttons stay visible, including in black-screen
+  mode, and the bar is restored when leaving it.
+- Tapping the panel button while still connecting no longer blacks out the
+  phone screen.
 
 ## 0.3.9
 
