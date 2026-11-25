@@ -227,6 +227,10 @@ public final class EInkPageRenderer {
         // Crisp binary text both reads better on e-ink and creates longer
         // repeated runs, which substantially reduces the D3 packet count.
         byte[] codes = ImageRaster.quantize(pixels, WIDTH, HEIGHT, true, 160, false, 1);
+        // Some boards end up showing black/white swapped; binary codes are only 0 and 1.
+        if (Ui.prefs(context).getBoolean("eink-invert", false)) {
+            for (int i = 0; i < codes.length; i++) codes[i] ^= 1;
+        }
         byte[] packed = PanelType.parse(panelType).pack(codes);
         bitmap.recycle();
         String sha = hex(MessageDigest.getInstance("SHA-256").digest(packed));
