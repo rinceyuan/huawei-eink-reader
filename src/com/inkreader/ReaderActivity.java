@@ -98,6 +98,7 @@ public final class ReaderActivity extends Activity implements PanelClient.Listen
     };
 
     @Override protected void onCreate(Bundle state) {
+        Ui.applyTheme(this);
         super.onCreate(state);
         Ui.migrateCompactDefaults(this);
         bookId = getIntent().getLongExtra("bookId", -1);
@@ -108,7 +109,7 @@ public final class ReaderActivity extends Activity implements PanelClient.Listen
             finish();
             return;
         }
-        activeTheme = Ui.prefs(this).getString("theme", "paper");
+        activeTheme = Ui.theme(this);
         Ui.applyWindow(this, Ui.isNight(this));
         buildUi();
         registerReceiver(screenReceiver, new IntentFilter(Intent.ACTION_SCREEN_ON));
@@ -763,7 +764,7 @@ public final class ReaderActivity extends Activity implements PanelClient.Listen
     @Override protected void onResume() {
         super.onResume();
         if (book == null) return;
-        String currentTheme = Ui.prefs(this).getString("theme", "paper");
+        String currentTheme = Ui.theme(this);
         if (!currentTheme.equals(activeTheme)) {
             saveProgress();
             recreate();

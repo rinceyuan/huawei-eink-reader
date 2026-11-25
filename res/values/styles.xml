@@ -4,10 +4,23 @@
         <item name="android:fontFamily">sans</item>
         <item name="android:windowActionModeOverlay">true</item>
         <item name="android:colorAccent">#315C4C</item>
+        <item name="android:colorBackground">#F5F2E9</item>
         <item name="android:statusBarColor">#F5F2E9</item>
         <item name="android:navigationBarColor">#F5F2E9</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+
+    <style name="AppThemeNight" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:colorAccent">#8FC3AD</item>
+        <item name="android:colorBackground">#161816</item>
+        <item name="android:statusBarColor">#161816</item>
+        <item name="android:navigationBarColor">#161816</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
         <item name="android:windowNoTitle">true</item>
     </style>
 </resources>

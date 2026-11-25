@@ -38,6 +38,7 @@ public final class SearchActivity extends Activity {
     private final AtomicInteger generation = new AtomicInteger();
 
     @Override protected void onCreate(Bundle state) {
+        Ui.applyTheme(this);
         super.onCreate(state);
         Ui.migrateCompactDefaults(this);
         Ui.applyWindow(this, Ui.isNight(this));

@@ -4,9 +4,12 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.InsetDrawable;
 import android.graphics.drawable.RippleDrawable;
 import android.os.Build;
 import android.view.View;
@@ -73,26 +76,37 @@ public final class Ui {
         button.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         button.setIncludeFontPadding(false);
         button.setGravity(android.view.Gravity.CENTER);
-        button.setMinHeight(dp(context, 42));
+        button.setMinHeight(dp(context, 48));
+        button.setMinimumHeight(dp(context, 48));
         button.setMinWidth(0);
-        button.setPadding(dp(context, 12), 0, dp(context, 12), 0);
+        button.setMinimumWidth(0);
         button.setStateListAnimator(null);
         GradientDrawable surface = round(context,
                 isNight(context) ? 0xff2b312b : 0xffe6ece5, 12);
         surface.setStroke(dp(context, 1),
                 isNight(context) ? 0xff3b443b : 0xffd3ddd2);
-        button.setBackground(new RippleDrawable(
-                ColorStateList.valueOf(0x44315c4c), surface, null));
+        setSurface(button, new RippleDrawable(
+                ColorStateList.valueOf(isNight(context) ? 0x449fc9b5 : 0x44315c4c), surface, null));
         return button;
     }
 
     public static Button primaryButton(Context context, String value) {
         Button button = button(context, value);
         button.setTextColor(Color.WHITE);
-        button.setBackground(new RippleDrawable(
-                ColorStateList.valueOf(0x55ffffff), round(context, GREEN, 12), null));
+        setSurface(button, new RippleDrawable(ColorStateList.valueOf(0x55ffffff),
+                round(context, isNight(context) ? 0xff3f7461 : GREEN, 12), null));
         return button;
     }
+
+    /** Insets the visible surface so adjacent buttons keep an 8 dp gap without shrinking the touch area. */
+    private static void setSurface(Button button, Drawable surface) {
+        Context context = button.getContext();
+        button.setBackground(new InsetDrawable(surface,
+                dp(context, BUTTON_GAP_DP), dp(context, 4), dp(context, BUTTON_GAP_DP), dp(context, 4)));
+        button.setPadding(dp(context, 12 + BUTTON_GAP_DP), 0, dp(context, 12 + BUTTON_GAP_DP), 0);
+    }
+
+    private static final int BUTTON_GAP_DP = 4;
 
     public static ImageButton iconButton(Context context, String drawableName,
                                          String description) {
@@ -102,15 +116,17 @@ public final class Ui {
         if (id != 0) button.setImageResource(id);
         button.setImageTintList(ColorStateList.valueOf(themeText(context)));
         button.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
-        button.setPadding(dp(context, 10), dp(context, 10),
-                dp(context, 10), dp(context, 10));
         button.setMinimumWidth(0);
         button.setMinimumHeight(0);
         button.setContentDescription(description);
         button.setTooltipText(description);
-        button.setBackground(new RippleDrawable(
-                ColorStateList.valueOf(0x44315c4c),
-                round(context, isNight(context) ? 0xff2b312b : 0xffe6ece5, 12), null));
+        int gap = dp(context, 3);
+        button.setBackground(new InsetDrawable(new RippleDrawable(
+                ColorStateList.valueOf(isNight(context) ? 0x449fc9b5 : 0x44315c4c),
+                round(context, isNight(context) ? 0xff2b312b : 0xffe6ece5, 12), null),
+                gap, gap, gap, gap));
+        int padding = dp(context, 10) + gap;
+        button.setPadding(padding, padding, padding, padding);
         return button;
     }
 
@@ -143,26 +159,42 @@ public final class Ui {
         }
     }
 
+    /** Effective reading theme; the default "system" follows the phone's dark mode. */
+    public static String theme(Context context) {
+        String theme = prefs(context).getString("theme", "system");
+        if (!"system".equals(theme)) return theme;
+        int mode = context.getResources().getConfiguration().uiMode
+                & Configuration.UI_MODE_NIGHT_MASK;
+        return mode == Configuration.UI_MODE_NIGHT_YES ? "night" : "paper";
+    }
+
+    /** Must run before super.onCreate so native widgets and dialogs match the theme. */
+    public static void applyTheme(Activity activity) {
+        int id = activity.getResources().getIdentifier(
+                isNight(activity) ? "AppThemeNight" : "AppTheme", "style", activity.getPackageName());
+        if (id != 0) activity.setTheme(id);
+    }
+
     public static int themeBackground(Context context) {
-        String theme = prefs(context).getString("theme", "paper");
+        String theme = theme(context);
         return "night".equals(theme) ? NIGHT : "eye".equals(theme) ? EYE : PAPER;
     }
 
     public static int themeCard(Context context) {
-        String theme = prefs(context).getString("theme", "paper");
+        String theme = theme(context);
         return "night".equals(theme) ? NIGHT_CARD : "eye".equals(theme) ? EYE_CARD : PAPER_CARD;
     }
 
     public static int themeText(Context context) {
-        return "night".equals(prefs(context).getString("theme", "paper")) ? NIGHT_TEXT : INK;
+        return isNight(context) ? NIGHT_TEXT : INK;
     }
 
     public static int themeMuted(Context context) {
-        return "night".equals(prefs(context).getString("theme", "paper")) ? 0xffaeb6a8 : MUTED;
+        return isNight(context) ? 0xffaeb6a8 : MUTED;
     }
 
     public static boolean isNight(Context context) {
-        return "night".equals(prefs(context).getString("theme", "paper"));
+        return "night".equals(theme(context));
     }
 
     public static Typeface fontTypeface(Context context) {

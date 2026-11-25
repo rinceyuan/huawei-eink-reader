@@ -30,6 +30,7 @@ public final class DirectoryActivity extends Activity {
     private TextView counter;
 
     @Override protected void onCreate(Bundle state) {
+        Ui.applyTheme(this);
         super.onCreate(state);
         Ui.applyWindow(this, Ui.isNight(this));
         db = new ReaderDb(this);

@@ -37,11 +37,12 @@ public final class BookshelfActivity extends Activity {
     private boolean importing;
 
     @Override protected void onCreate(Bundle state) {
+        Ui.applyTheme(this);
         super.onCreate(state);
         Ui.migrateCompactDefaults(this);
         Ui.applyWindow(this, Ui.isNight(this));
         db = new ReaderDb(this);
-        activeTheme = Ui.prefs(this).getString("theme", "paper");
+        activeTheme = Ui.theme(this);
         sort = Ui.prefs(this).getString("bookshelf-sort", ReaderDb.SORT_RECENT);
         buildUi();
     }
@@ -134,7 +135,7 @@ public final class BookshelfActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
-        String currentTheme = Ui.prefs(this).getString("theme", "paper");
+        String currentTheme = Ui.theme(this);
         if (!currentTheme.equals(activeTheme)) {
             recreate();
             return;

@@ -32,6 +32,7 @@ public final class SettingsActivity extends Activity {
     private CheckBox followSystem;
 
     @Override protected void onCreate(Bundle state) {
+        Ui.applyTheme(this);
         super.onCreate(state);
         Ui.migrateCompactDefaults(this);
         prefs = Ui.prefs(this);
@@ -149,9 +150,10 @@ public final class SettingsActivity extends Activity {
         body.addView(fontWeight);
 
         section(body, "阅读背景");
-        Spinner theme = spinner(new String[]{"纸张日间", "夜间", "护眼绿"});
-        String savedTheme = prefs.getString("theme", "paper");
-        theme.setSelection("night".equals(savedTheme) ? 1 : "eye".equals(savedTheme) ? 2 : 0);
+        Spinner theme = spinner(new String[]{"跟随系统深色模式", "纸张日间", "夜间", "护眼绿"});
+        String savedTheme = prefs.getString("theme", "system");
+        theme.setSelection("paper".equals(savedTheme) ? 1 : "night".equals(savedTheme) ? 2
+                : "eye".equals(savedTheme) ? 3 : 0);
         theme.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             boolean initial = true;
             @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
@@ -159,7 +161,8 @@ public final class SettingsActivity extends Activity {
                     initial = false;
                     return;
                 }
-                String value = position == 1 ? "night" : position == 2 ? "eye" : "paper";
+                String value = position == 1 ? "paper" : position == 2 ? "night"
+                        : position == 3 ? "eye" : "system";
                 prefs.edit().putString("theme", value).apply();
                 recreate();
             }

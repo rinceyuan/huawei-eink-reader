@@ -6,6 +6,9 @@
 - Optional dry-hold refresh: after D4, keep the field for 20 s without DE
   polling and delay the system presence check past the hold (for NXP SN220
   phones that lose the tag during refresh). D4 is resent on `6986`.
+- Reading background defaults to following the system dark mode; native
+  widgets and dialogs use a matching dark theme.
+- Buttons keep an 8 dp visual gap between neighbours.
 
 ## 0.3.9
 

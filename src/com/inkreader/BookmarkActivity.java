@@ -27,6 +27,7 @@ public final class BookmarkActivity extends Activity {
     private TextView empty;
 
     @Override protected void onCreate(Bundle state) {
+        Ui.applyTheme(this);
         super.onCreate(state);
         Ui.migrateCompactDefaults(this);
         Ui.applyWindow(this, Ui.isNight(this));
