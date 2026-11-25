@@ -13,6 +13,7 @@ import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -23,6 +24,7 @@ import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Long-lived privileged NFC worker. It keeps the ISO-DEP field and authenticated
@@ -33,7 +35,10 @@ public final class ReaderPanelWorker {
     private static Class<?> adapterType;
     private static final Binder token = new Binder();
     private static final AtomicBoolean tagSeen = new AtomicBoolean();
+    private static final AtomicInteger discoveries = new AtomicInteger();
     private static volatile Tag detectedTag;
+    private static volatile IsoDep current;
+    private static final int MAX_RECONNECTS = 2;
     private static int discoveredCode;
     private static Object callbackProxy;
     private static boolean readerTouched;
@@ -113,9 +118,12 @@ public final class ReaderPanelWorker {
                 if (code != discoveredCode) return super.onTransact(code, data, reply, flags);
                 data.enforceInterface("android.nfc.IAppCallback");
                 Tag tag = data.readInt() == 0 ? null : Tag.CREATOR.createFromParcel(data);
-                if (tag != null && tagSeen.compareAndSet(false, true)) {
+                if (tag != null) {
                     detectedTag = tag;
-                    emit("TAG", "收到墨水屏标签 UID=" + hex(tag.getId()));
+                    int count = discoveries.incrementAndGet();
+                    tagSeen.set(true);
+                    emit("TAG", (count > 1 ? "重新发现墨水屏标签 UID=" : "收到墨水屏标签 UID=")
+                            + hex(tag.getId()));
                 }
                 if (reply != null) reply.writeNoException();
                 return true;
@@ -174,14 +182,8 @@ public final class ReaderPanelWorker {
             if (!tagSeen.get()) throw new IllegalStateException(
                     "未发现墨水屏标签；保持手机壳贴合并核对 Shizuku 授权");
 
-            Tag tag = detectedTag;
-            IsoDep iso = IsoDep.get(tag);
-            if (iso == null) throw new IllegalArgumentException("目标未提供 ISO-DEP");
             emit("STAGE", "connecting|正在建立持久 ISO-DEP 连接");
-            iso.connect();
-            if (iso.getMaxTransceiveLength() < 257) {
-                throw new IllegalArgumentException("平台单次 APDU 长度不足 257 字节");
-            }
+            connect(detectedTag);
             PanelProtocol.Control control = new PanelProtocol.Control() {
                 @Override public long now() { return SystemClock.elapsedRealtime(); }
                 @Override public void sleep(long ms) throws Exception { Thread.sleep(ms); }
@@ -194,6 +196,8 @@ public final class ReaderPanelWorker {
             };
             PanelProtocol protocol = new PanelProtocol((command, timeout) -> {
                 control.check();
+                IsoDep iso = current;
+                if (iso == null) throw new IOException("ISO-DEP 未连接");
                 iso.setTimeout(timeout);
                 String ins = String.format(Locale.ROOT, "%02X", command[1] & 255);
                 if (command[1] != (byte) 0xD3 && command[1] != (byte) 0xDE) {
@@ -231,24 +235,43 @@ public final class ReaderPanelWorker {
                         break;
                     }
                     long started = SystemClock.elapsedRealtime();
-                    if ("PRELOAD".equals(parts[0])) {
-                        protocol.writeImage(image);
-                        lastSha = actualSha;
-                        emit("PRELOADED", id + "|" + actualSha + "|"
-                                + (SystemClock.elapsedRealtime() - started));
-                    } else {
-                        boolean fast = actualSha.equals(lastSha);
-                        if (!fast) protocol.writeImage(image);
-                        int refreshPowerMs = fast ? Math.min(powerMs, 500) : powerMs;
-                        int refreshPollMs = fast ? Math.min(pollMs, 50) : pollMs;
-                        emit("FAST_TURN", fast
-                                ? "预传命中，使用 " + refreshPowerMs + " ms 快速 D4"
-                                : "预传未命中，完整传输后使用 " + refreshPowerMs + " ms D4");
-                        if (holdMs > 0) protocol.refreshHold(refreshPowerMs, holdMs);
-                        else protocol.refresh(refreshPowerMs, refreshPollMs);
-                        lastSha = null;
-                        emit("ADVANCED", id + "|" + actualSha + "|" + (fast ? "1" : "0")
-                                + "|" + (SystemClock.elapsedRealtime() - started));
+                    boolean relink = false;
+                    for (int attempt = 0; ; attempt++) {
+                        try {
+                            if (relink) {
+                                reconnect(stop);
+                                protocol.prepare();
+                                lastSha = null;
+                                relink = false;
+                            }
+                            if ("PRELOAD".equals(parts[0])) {
+                                protocol.writeImage(image);
+                                lastSha = actualSha;
+                                emit("PRELOADED", id + "|" + actualSha + "|"
+                                        + (SystemClock.elapsedRealtime() - started));
+                            } else {
+                                boolean fast = actualSha.equals(lastSha);
+                                if (!fast) protocol.writeImage(image);
+                                int refreshPowerMs = fast ? Math.min(powerMs, 500) : powerMs;
+                                int refreshPollMs = fast ? Math.min(pollMs, 50) : pollMs;
+                                emit("FAST_TURN", fast
+                                        ? "预传命中，使用 " + refreshPowerMs + " ms 快速 D4"
+                                        : "预传未命中，完整传输后使用 " + refreshPowerMs + " ms D4");
+                                if (holdMs > 0) protocol.refreshHold(refreshPowerMs, holdMs);
+                                else protocol.refresh(refreshPowerMs, refreshPollMs);
+                                lastSha = null;
+                                emit("ADVANCED", id + "|" + actualSha + "|" + (fast ? "1" : "0")
+                                        + "|" + (SystemClock.elapsedRealtime() - started));
+                            }
+                            break;
+                        } catch (IOException lost) {
+                            // After a refresh some boards stop answering on the old link;
+                            // re-discover instead of ending the session and cutting the field.
+                            if (holdMs <= 0 || attempt >= MAX_RECONNECTS) throw lost;
+                            emit("STAGE", "reconnecting|墨水屏连接中断，正在重新连接（第 "
+                                    + (attempt + 1) + " 次）");
+                            relink = true;
+                        }
                     }
                     imageFile.delete();
                 }
@@ -268,6 +291,49 @@ public final class ReaderPanelWorker {
             emit("END", "面板会话结束");
         }
         System.exit(exit);
+    }
+
+    private static void connect(Tag tag) throws Exception {
+        IsoDep iso = IsoDep.get(tag);
+        if (iso == null) throw new IllegalArgumentException("目标未提供 ISO-DEP");
+        iso.connect();
+        if (iso.getMaxTransceiveLength() < 257) {
+            throw new IllegalArgumentException("平台单次 APDU 长度不足 257 字节");
+        }
+        current = iso;
+    }
+
+    /**
+     * Waits for the still-active reader mode to re-discover the panel. Reader mode is
+     * only cycled as a fallback, because dropping the field can interrupt a refresh.
+     */
+    private static void reconnect(File stop) throws Exception {
+        IsoDep old = current;
+        current = null;
+        int seen = discoveries.get();
+        try {
+            if (old != null) old.close();
+        } catch (Exception ignored) {
+        }
+        if (!awaitDiscovery(stop, seen, 20000)) {
+            emit("STAGE", "reconnecting|未自动重新发现，重启寻卡");
+            reader(0);
+            SystemClock.sleep(200);
+            reader(0x81);
+            if (!awaitDiscovery(stop, seen, 15000)) {
+                throw new IllegalStateException("墨水屏连接中断后未能重新发现；请保持贴合后重新连接");
+            }
+        }
+        connect(detectedTag);
+    }
+
+    private static boolean awaitDiscovery(File stop, int seen, long timeoutMs) throws Exception {
+        long deadline = SystemClock.elapsedRealtime() + timeoutMs;
+        while (discoveries.get() == seen && SystemClock.elapsedRealtime() < deadline) {
+            if (stop.exists()) throw new InterruptedException("用户停止");
+            SystemClock.sleep(30);
+        }
+        return discoveries.get() != seen;
     }
 
     private static boolean isInside(File root, File file) throws Exception {

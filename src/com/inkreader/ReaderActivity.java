@@ -505,7 +505,7 @@ public final class ReaderActivity extends Activity implements PanelClient.Listen
         panelClient = new PanelClient(this, this, panelType,
                 Ui.prefs(this).getInt("panel-power-ms", 2000),
                 Ui.prefs(this).getInt("panel-poll-ms", 100),
-                Ui.prefs(this).getBoolean("panel-dry-hold", false) ? 20000 : 0);
+                Ui.prefs(this).getBoolean("panel-dry-hold", false) ? 30000 : 0);
         panelClient.start();
     }
 
