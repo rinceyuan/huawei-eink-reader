@@ -679,13 +679,9 @@ public final class ReaderActivity extends Activity implements PanelClient.Listen
         bottomBar.setVisibility(enabled ? View.GONE : View.VISIBLE);
         if (enabled) {
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-            getWindow().getDecorView().setSystemUiVisibility(
-                    View.SYSTEM_UI_FLAG_FULLSCREEN
-                            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                            | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                            | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+            // Keep the system navigation buttons available; only the status bar is hidden.
+            getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN);
+            getWindow().setNavigationBarColor(Color.BLACK);
             getWindow().getAttributes().screenBrightness = 0f;
             getWindow().setAttributes(getWindow().getAttributes());
             panelButton.setText("退出息屏");
@@ -693,6 +689,7 @@ public final class ReaderActivity extends Activity implements PanelClient.Listen
         } else {
             panelButton.setText(panelClient != null && pageReady ? "息屏翻页" : "连接水墨屏");
             applyBrightness();
+            getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
             Ui.applyWindow(this, Ui.isNight(this));
             if (!Ui.prefs(this).getBoolean("keep-awake", false)) {
                 getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
