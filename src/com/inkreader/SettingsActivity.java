@@ -236,15 +236,6 @@ public final class SettingsActivity extends Activity {
         TextView dryHoldHint = Ui.text(this, 13, Ui.themeMuted(this), false);
         dryHoldHint.setText("小米等 NXP SN220 机型刷新中途报 TagLostException 时开启：D4 后 30 秒内不发任何指令，只保持供能；之后若连接中断会自动重新连接。");
         body.addView(dryHoldHint);
-        CheckBox invert = new CheckBox(this);
-        invert.setText("墨水屏黑白反转");
-        invert.setChecked(prefs.getBoolean("eink-invert", false));
-        invert.setOnCheckedChangeListener((button, checked) ->
-                prefs.edit().putBoolean("eink-invert", checked).apply());
-        body.addView(invert);
-        TextView invertHint = Ui.text(this, 13, Ui.themeMuted(this), false);
-        invertHint.setText("墨水屏显示成黑底白字时开启。只影响墨水屏，不影响手机上的阅读背景。");
-        body.addView(invertHint);
         Button check = Ui.button(this, "检查 Shizuku 与 NFC");
         check.setOnClickListener(v -> checkShizuku());
         body.addView(check);

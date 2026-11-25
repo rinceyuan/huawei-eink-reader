@@ -13,7 +13,6 @@
 - Reading background defaults to following the system dark mode; native
   widgets and dialogs use a matching dark theme.
 - Buttons keep an 8 dp visual gap between neighbours.
-- Optional "墨水屏黑白反转" for boards that show the page as white-on-black.
 
 ## 0.3.9
 
