@@ -2,11 +2,24 @@ package org.nfcresearch.qpolllab;
 
 /** Huawei JD79665AA panel variants; selection is physical, never inferred from D1. */
 public enum PanelType {
-    A0, A1;
+    /**
+     * A0X: A0 boards that keep the factory vertical scan (A1 field 00120030FFFFFF).
+     * On such a board the A0 layout showed the left/right halves swapped, so the
+     * halves are exchanged before the A0 even/odd interleave (same as qpoll-lite's A0X).
+     */
+    A0, A1, A0X;
     public static PanelType parse(String value) {
         if("A0".equals(value))return A0;
         if("A1".equals(value))return A1;
+        if("A0X".equals(value))return A0X;
         throw new IllegalArgumentException("请先选择屏幕类型 A0 或 A1");
+    }
+    /** Controller row that receives logical source row {@code row}. */
+    int target(int row) {
+        final int rows=PanelProtocol.WIDTH,half=rows/2;
+        if(this==A1)return row;
+        if(this==A0X)row=row<half?row+half:row-half;
+        return row<half?2*row:2*rows-1-2*row;
     }
     public byte[] pack(byte[] codes) {
         return map(PanelProtocol.packCodes(codes,PanelProtocol.WIDTH,PanelProtocol.HEIGHT),false);
@@ -18,7 +31,7 @@ public enum PanelType {
         // Transposed controller rows: first half -> even rows, second half -> reversed odd rows.
         final int rows=PanelProtocol.WIDTH,stride=PanelProtocol.HEIGHT/4;
         for(int row=0;row<rows;row++) {
-            int target=row<rows/2?2*row:2*rows-1-2*row;
+            int target=target(row);
             System.arraycopy(raw,(inverse?target:row)*stride,out,(inverse?row:target)*stride,stride);
         }
         return out;

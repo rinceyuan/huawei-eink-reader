@@ -42,6 +42,29 @@ public final class ReaderPanelWorker {
     private static final int MAX_CHARGES = 3;
     private static final long CHARGE_MS = 10000;
     private static final long FIELD_OFF_MS = 1000;
+    private static final int MAX_CHARGE_BEFORE_REFRESH_MS = 20000;
+    private static int chargeMs;
+
+    /**
+     * Keeps the field on without any APDU right before D4 so the panel's storage capacitor
+     * starts the waveform full (cf. CLF184's pre-send charge in qpoll-lite 1.4.36). The
+     * presence-check timer restarts at the last APDU, so this stays below its delay.
+     */
+    private static void chargeBeforeRefresh(File stop) throws Exception {
+        if (chargeMs <= 0) return;
+        long started = SystemClock.elapsedRealtime(), until = started + chargeMs;
+        long nextTick = started;
+        while (SystemClock.elapsedRealtime() < until) {
+            if (stop.exists()) throw new InterruptedException("用户停止");
+            long now = SystemClock.elapsedRealtime();
+            if (now >= nextTick) {
+                long left = (until - now + 999) / 1000;
+                emit("STAGE", "charging|刷新前充能，保持贴合别动（还剩 " + left + " 秒）");
+                nextTick += 1000;
+            }
+            SystemClock.sleep(100);
+        }
+    }
     private static boolean roundEnded;
     private static int discoveredCode;
     private static Object callbackProxy;
@@ -84,6 +107,25 @@ public final class ReaderPanelWorker {
         return (Integer) invoke("sendVendorNciMessage",
                 new Class<?>[]{int.class, int.class, int.class, byte[].class},
                 1, 15, 112, new byte[]{0x31, (byte) action});
+    }
+
+    /**
+     * HyperOS can accept QTag and ReaderMode while system polling is paused and then skip
+     * the new discovery config, so the panel never answers. Ask the NFC service to resume
+     * polling with this round's config (port of CLF184's fix in qpoll-lite 1.4.36).
+     */
+    private static void resumePolling() {
+        try {
+            Object result = adapterType.getMethod("resumePolling").invoke(service);
+            int status = result instanceof Integer ? (Integer) result : 1;
+            emit("POLLING_RESUME", "请求恢复系统 NFC 轮询，状态=" + status);
+        } catch (NoSuchMethodException missing) {
+            emit("POLLING_RESUME", "系统没有 resumePolling 接口，跳过");
+        } catch (Exception error) {
+            Throwable cause = error instanceof InvocationTargetException && error.getCause() != null
+                    ? error.getCause() : error;
+            emit("POLLING_RESUME_FAILED", "恢复轮询失败：" + cause);
+        }
     }
 
     private static int presenceMs = 5000;
@@ -161,7 +203,7 @@ public final class ReaderPanelWorker {
     public static void main(String[] args) {
         int exit = 0;
         try {
-            if (args.length != 4) throw new IllegalArgumentException("参数数量错误");
+            if (args.length != 5) throw new IllegalArgumentException("参数数量错误");
             int scanSeconds = Integer.parseInt(args[0]);
             File stop = new File(args[1]).getCanonicalFile();
             File root = new File(args[2]).getCanonicalFile();
@@ -169,6 +211,10 @@ public final class ReaderPanelWorker {
             presenceMs = Integer.parseInt(args[3]);
             if (presenceMs < 1000 || presenceMs > 60000) throw new IllegalArgumentException("presence 参数错误");
             emit("PRESENCE", "系统在位检查间隔=" + presenceMs + " ms");
+            chargeMs = Integer.parseInt(args[4]);
+            if (chargeMs < 0 || chargeMs > MAX_CHARGE_BEFORE_REFRESH_MS) {
+                throw new IllegalArgumentException("刷新前充能参数错误");
+            }
             init();
             qtagTouched = true;
             int status = qtag(1);
@@ -176,6 +222,7 @@ public final class ReaderPanelWorker {
             if (status != 0) throw new IllegalStateException("QTag 启用失败");
             readerTouched = true;
             reader(0x81);
+            resumePolling();
             emit("START", "reader:" + scanSeconds);
             long deadline = SystemClock.elapsedRealtime() + scanSeconds * 1000L;
             while (!tagSeen.get() && !stop.exists()
@@ -272,8 +319,17 @@ public final class ReaderPanelWorker {
                                         ? "预传命中，使用 " + refreshPowerMs + " ms 快速 D4"
                                         : "预传未命中，完整传输后使用 " + refreshPowerMs + " ms D4");
                                 if (holdMs > 0) {
+                                    chargeBeforeRefresh(stop);
                                     protocol.refreshHold(refreshPowerMs, holdMs);
                                     roundEnded = true;
+                                    // End the round with the field off, as qpoll-lite does on
+                                    // SN220U: the panel no longer answers, and leaving the field
+                                    // up only waits for the presence check to drop it.
+                                    try {
+                                        dropField();
+                                    } catch (Exception error) {
+                                        emit("FIELD_OFF_FAILED", "刷新后断场失败：" + error);
+                                    }
                                 } else protocol.refresh(refreshPowerMs, refreshPollMs);
                                 lastSha = null;
                                 emit("ADVANCED", id + "|" + actualSha + "|" + (fast ? "1" : "0")
@@ -331,22 +387,27 @@ public final class ReaderPanelWorker {
         current = iso;
     }
 
-    /**
-     * Drops the field completely (reader mode and Q-Poll), then raises it again with
-     * Q-Poll first and reader mode second, and waits for the panel. Only called after a
-     * refresh round has finished or the link was already lost.
-     */
-    private static void reconnect(File stop) throws Exception {
+    /** Closes the link and turns the field off (ReaderMode first, then QTag). */
+    private static void dropField() throws Exception {
         IsoDep old = current;
         current = null;
         try {
             if (old != null) old.close();
         } catch (Exception ignored) {
         }
-        emit("STAGE", "reconnecting|断开射频场，重新供能并寻找墨水屏");
         reader(0);
         int off = qtag(0);
         if (off != 0) emit("QTAG_OFF_FAILED", "关闭 QTag，API 状态=" + off);
+    }
+
+    /**
+     * Drops the field completely (reader mode and Q-Poll), then raises it again with
+     * Q-Poll first and reader mode second, and waits for the panel. Only called after a
+     * refresh round has finished or the link was already lost.
+     */
+    private static void reconnect(File stop) throws Exception {
+        emit("STAGE", "reconnecting|断开射频场，重新供能并寻找墨水屏");
+        dropField();
         long until = SystemClock.elapsedRealtime() + FIELD_OFF_MS;
         while (SystemClock.elapsedRealtime() < until) {
             if (stop.exists()) throw new InterruptedException("用户停止");
@@ -356,6 +417,7 @@ public final class ReaderPanelWorker {
         int on = qtag(1);
         if (on != 0) throw new IllegalStateException("QTag 重新启用失败，API 状态=" + on);
         reader(0x81);
+        resumePolling();
         if (!awaitDiscovery(stop, seen, 15000)) {
             throw new IllegalStateException("重新供能后未发现墨水屏；请保持贴合后重新连接");
         }

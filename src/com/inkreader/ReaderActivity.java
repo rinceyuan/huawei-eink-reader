@@ -347,7 +347,15 @@ public final class ReaderActivity extends Activity implements PanelClient.Listen
         pageCounter.setTextColor(Ui.themeMuted(this));
         pageCounter.setBackground(Ui.round(this, Ui.themeBackground(this), 10));
         applyBrightness();
-        if (Ui.prefs(this).getBoolean("keep-awake", false) || darkMode) {
+        updateKeepScreenOn();
+    }
+
+    /**
+     * Android turns the NFC field off with the screen, which would cut an e-ink refresh
+     * (upload + charge + hold take about a minute), so stay awake while a panel session runs.
+     */
+    private void updateKeepScreenOn() {
+        if (Ui.prefs(this).getBoolean("keep-awake", false) || darkMode || panelClient != null) {
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         } else {
             getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -505,13 +513,16 @@ public final class ReaderActivity extends Activity implements PanelClient.Listen
         if (panelClient != null) return;
         resetPanelTransferState();
         panelStatus.setText("正在准备 NFC 传输");
-        dryHold = Ui.prefs(this).getBoolean("panel-dry-hold", false);
+        dryHold = Ui.dryHold(this);
         panelClient = new PanelClient(this, this, panelType,
-                // Dry hold follows the 500 ms power-up used by the reference tools.
-                dryHold ? 500 : Ui.prefs(this).getInt("panel-power-ms", 2000),
+                // Each dry-hold round starts on a freshly powered panel; give it the full
+                // 2000 ms power-up (500 ms only finished part of the screen on a Xiaomi 17 Pro).
+                dryHold ? 2000 : Ui.prefs(this).getInt("panel-power-ms", 2000),
                 Ui.prefs(this).getInt("panel-poll-ms", 100),
-                dryHold ? 30000 : 0);
+                dryHold ? 30000 : 0,
+                dryHold ? Ui.prefs(this).getInt("panel-charge-ms", 10000) : 0);
         panelClient.start();
+        updateKeepScreenOn();
     }
 
     private void queueAdvance(int targetPage) {
@@ -702,9 +713,7 @@ public final class ReaderActivity extends Activity implements PanelClient.Listen
             applyBrightness();
             getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
             Ui.applyWindow(this, Ui.isNight(this));
-            if (!Ui.prefs(this).getBoolean("keep-awake", false)) {
-                getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-            }
+            updateKeepScreenOn();
         }
     }
 
@@ -766,6 +775,7 @@ public final class ReaderActivity extends Activity implements PanelClient.Listen
             panelClient.close();
             panelClient = null;
         }
+        updateKeepScreenOn();
         panelButton.setText("重新连接水墨屏");
     }
 

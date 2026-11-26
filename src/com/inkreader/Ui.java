@@ -206,6 +206,11 @@ public final class Ui {
         return Typeface.create("serif", style);
     }
 
+    /** Dry hold defaults on for Android 16+, like qpoll-lite's SN220U / SDK 36+ path. */
+    public static boolean dryHold(Context context) {
+        return prefs(context).getBoolean("panel-dry-hold", Build.VERSION.SDK_INT >= 36);
+    }
+
     public static SharedPreferences prefs(Context context) {
         return context.getSharedPreferences("reader-settings", Context.MODE_PRIVATE);
     }

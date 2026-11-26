@@ -32,6 +32,7 @@ public final class PanelClient {
     private final int powerMs;
     private final int pollMs;
     private final int holdMs;
+    private final int chargeMs;
     private final AtomicBoolean closed = new AtomicBoolean();
     private final AtomicBoolean started = new AtomicBoolean();
     private final AtomicLong ids = new AtomicLong();
@@ -43,9 +44,9 @@ public final class PanelClient {
     private final Shizuku.UserServiceArgs args = new Shizuku.UserServiceArgs(
             new ComponentName("com.inkreader.reader", "com.inkreader.PanelShizukuService"))
             .tag("inkreader-panel")
-            .version(23)
+            .version(25)
             .daemon(false)
-            .processNameSuffix("eink_panel_v23");
+            .processNameSuffix("eink_panel_v25");
 
     private final ServiceConnection connection = new ServiceConnection() {
         @Override public void onServiceConnected(ComponentName name, IBinder service) {
@@ -77,13 +78,14 @@ public final class PanelClient {
             };
 
     public PanelClient(Activity activity, Listener listener, String panelType,
-                       int powerMs, int pollMs, int holdMs) {
+                       int powerMs, int pollMs, int holdMs, int chargeMs) {
         this.activity = activity;
         this.listener = listener;
         this.panelType = panelType;
         this.powerMs = powerMs;
         this.pollMs = pollMs;
         this.holdMs = holdMs;
+        this.chargeMs = chargeMs;
     }
 
     public void start() {
@@ -297,7 +299,10 @@ public final class PanelClient {
         Parcel reply = Parcel.obtain();
         try {
             request.writeInterfaceToken(TOKEN);
-            if (code == 1) request.writeInt(holdMs);
+            if (code == 1) {
+                request.writeInt(holdMs);
+                request.writeInt(chargeMs);
+            }
             if (!service.transact(code, request, reply, 0)) {
                 throw new IllegalStateException("传输服务不兼容");
             }

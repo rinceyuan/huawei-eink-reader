@@ -3,6 +3,24 @@
 ## Unreleased
 
 - Accept the second registered FMSC APPID `00000001` in the D1 C0 check.
+- New panel type "A0X · 左右半屏互换（原厂纵向扫描）" (`A0X`) for A0 boards on the
+  factory vertical scan, where the A0 layout showed the halves swapped. On the
+  tested Xiaomi 17 Pro the page currently appears as white text on black.
+- When D8 asks for the default PIN, verify it a second time after the D8
+  recheck, as the reference PN532 flow does.
+- After enabling QTag and ReaderMode, ask the NFC service to resume polling
+  (`INfcAdapter.resumePolling`). HyperOS can otherwise keep polling paused and
+  skip the Q-Poll config, so the panel is not found (port of CLF184's fix in
+  qpoll-lite 1.4.36).
+- Dry-hold mode: optional charge before refresh (off / 5 / 10 / 20 s, default
+  10 s). After the upload the field stays on without APDUs so the panel starts
+  the waveform with a full store; for refreshes that stop after one or two
+  flashes (cf. CLF184's pre-send charge in qpoll-lite).
+- Dry-hold mode turns the field off right after each refresh round instead of
+  at the next page turn, and is on by default on Android 16+ (as qpoll-lite
+  does for SDK 36+).
+- Keep the phone screen on while an e-ink session is active; the system turns
+  the NFC field off with the screen, which cut refreshes short.
 - Optional dry-hold refresh: after D4, keep the field for 30 s without DE
   polling and delay the system presence check past the hold (for NXP SN220
   phones that lose the tag during refresh). D4 is resent on `6986`.
@@ -10,7 +28,7 @@
   the panel to be re-discovered, re-runs the D1/D8 checks and retries
   (up to 2 times) instead of ending the session. Low-voltage status words
   (6502/68CA/698A) wait 10 s in the field and retry (up to 3 times).
-- Dry-hold mode follows qpoll-lite's Android 16+ / SN220U path: 500 ms D4
+- Dry-hold mode follows qpoll-lite's Android 16+ / SN220U path: 2000 ms D4
   power-up, no preloading, and each page turn fully drops the field
   (ReaderMode and QTag off for 1 s) before re-raising it QTag-first and
   sending the full frame.

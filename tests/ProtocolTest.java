@@ -76,7 +76,7 @@ public final class ProtocolTest {
             if(p[3]==1){current.reset();block++;blocks++;sub=0;}
             else{eq(count==250,"non-final application stride remains 250");sub++;}}
         eq(blocks==53&&good.d3==53&&current.size()==0,"53 complete compressed LZO blocks");passed("53 compressed D3 packets / one D4 / busy to idle");
-        Fake auth=new Fake();auth.authNeeded=true;auth.run();eq(auth.pin==1&&auth.d8==2,"one default PIN only");passed("conditional single PIN verification");
+        Fake auth=new Fake();auth.authNeeded=true;auth.run();eq(auth.pin==2&&auth.d8==2,"default PIN verified twice around the D8 recheck");passed("conditional PIN verification follows the reference flow");
         Fake pinBad=new Fake();pinBad.authNeeded=true;pinBad.failPin=true;rejects(pinBad::run,"PIN failure");eq(pinBad.pin==1&&pinBad.d3+pinBad.d4==0,"PIN is not retried");passed("PIN failure stops without guessing");
         Fake uploadBad=new Fake();uploadBad.failD3=3;rejects(uploadBad::run,"D3 failure");eq(uploadBad.d3==3&&uploadBad.d4==0,"failed D3 not retried and no D4");passed("upload failure stops before refresh");
         Fake refreshBad=new Fake();refreshBad.failD4=true;rejects(refreshBad::run,"D4 failure");eq(refreshBad.d4==1&&refreshBad.de==0,"D4 not replayed");passed("D4 error is never replayed");

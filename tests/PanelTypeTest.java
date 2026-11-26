@@ -16,7 +16,9 @@ public final class PanelTypeTest {
             for(int y=0;y<768;y++)for(int x=0;x<552;x++)require(preview[y*552+x]==ImageRaster.color(codes[y*552+x]),"logical preview round trip");
             // Independent direct pixel-to-wire oracle: invert target row numbering.
             for(int controller=0;controller<552;controller++) {
-                int source=type==PanelType.A1?controller:(controller%2==0?controller/2:551-controller/2);
+                int source=type==PanelType.A1?controller
+                        :type==PanelType.A0X?(controller%2==0?controller/2+276:(551-controller)/2)
+                        :(controller%2==0?controller/2:551-controller/2);
                 int x=551-source;
                 for(int y=0;y<768;y+=4) {
                     int expected=0;for(int k=0;k<4;k++)expected|=codes[(y+k)*552+x]<<(6-2*k);
@@ -50,7 +52,10 @@ public final class PanelTypeTest {
         }
         require(Arrays.equals(codes,original),"no input mutation");
         for(String value:new String[]{"","a0","unknown",null})try {PanelType.parse(value);throw new AssertionError("invalid choice accepted");}catch(IllegalArgumentException expected){}
-        require(PanelType.parse("A0")==PanelType.A0&&PanelType.parse("A1")==PanelType.A1,"explicit selection");
+        require(PanelType.parse("A0")==PanelType.A0&&PanelType.parse("A1")==PanelType.A1
+                &&PanelType.parse("A0X")==PanelType.A0X,"explicit selection");
+        require(PanelType.A0X.target(0)==551&&PanelType.A0X.target(275)==1
+                &&PanelType.A0X.target(276)==0&&PanelType.A0X.target(551)==550,"A0X swaps halves before interleave");
         ProtocolTest.Fake changed=new ProtocolTest.Fake();
         PanelProtocol changing=new PanelProtocol((cmd,timeout)->{
             if((cmd[1]&255)==0xD1&&changed.d1==1){changed.info=changed.info.clone();changed.info[11]=1;}

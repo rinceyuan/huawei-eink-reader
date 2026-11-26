@@ -272,8 +272,11 @@ public final class PanelProtocol {
         control.event("STAGE","authenticating|检查图像区访问权限");
         byte[] access=exchange(D8,"D8 权限查询",5000,false);
         if(status(access)==0x6985) {
-            exchange(PIN,"验证已公开的默认 PIN（仅一次）",5000,true);
+            exchange(PIN,"验证已公开的默认 PIN（第一次）",5000,true);
             exchange(D8,"D8 再次检查",5000,true);
+            // As in the reference PN532 flow (and HBWuChang's SN220 / APPID 00000001
+            // findings), verify the same PIN again; without it D4 lost the tag there.
+            exchange(PIN,"验证已公开的默认 PIN（第二次）",5000,true);
         } else requireOk(access,"D8 权限查询");
         // Check the same factory profile again; no DB/DA configuration writes exist here.
         Info rechecked=parseInfo(exchange(D1,"D1 写入前复核",5000,true));

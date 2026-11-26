@@ -215,12 +215,15 @@ public final class SettingsActivity extends Activity {
         TextView panelHint = Ui.text(this, 13, Ui.themeMuted(this), false);
         panelHint.setText("按实物选择屏幕型号；A0 与 A1 无法由 D1 自动识别。");
         body.addView(panelHint);
-        Spinner panel = spinner(new String[]{"请选择屏幕型号", "A0 · 552×768 四色", "A1 · 552×768 四色"});
+        Spinner panel = spinner(new String[]{"请选择屏幕型号", "A0 · 552×768 四色", "A1 · 552×768 四色",
+                "A0X · 左右半屏互换（原厂纵向扫描）"});
         String savedPanel = prefs.getString("panel-type", "");
-        panel.setSelection("A0".equals(savedPanel) ? 1 : "A1".equals(savedPanel) ? 2 : 0);
+        panel.setSelection("A0".equals(savedPanel) ? 1 : "A1".equals(savedPanel) ? 2
+                : "A0X".equals(savedPanel) ? 3 : 0);
         panel.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                prefs.edit().putString("panel-type", position == 1 ? "A0" : position == 2 ? "A1" : "").apply();
+                prefs.edit().putString("panel-type", position == 1 ? "A0" : position == 2 ? "A1"
+                        : position == 3 ? "A0X" : "").apply();
             }
 
             @Override public void onNothingSelected(AdapterView<?> parent) {
@@ -229,13 +232,29 @@ public final class SettingsActivity extends Activity {
         body.addView(panel);
         CheckBox dryHold = new CheckBox(this);
         dryHold.setText("刷新时不查询忙状态（保场 30 秒）");
-        dryHold.setChecked(prefs.getBoolean("panel-dry-hold", false));
+        dryHold.setChecked(Ui.dryHold(this));
         dryHold.setOnCheckedChangeListener((button, checked) ->
                 prefs.edit().putBoolean("panel-dry-hold", checked).apply());
         body.addView(dryHold);
         TextView dryHoldHint = Ui.text(this, 13, Ui.themeMuted(this), false);
-        dryHoldHint.setText("小米等 NXP SN220 机型刷新中途报 TagLostException 时开启：D4 使用 500 ms 上电等待，之后 30 秒内不发任何指令，只保持供能；每次翻页先完全断开射频场再重新供能并完整传输，不再预传。");
+        dryHoldHint.setText("小米等 NXP SN220 机型刷新中途报 TagLostException 时开启：D4 使用 2000 ms 上电等待，之后 30 秒内不发任何指令，只保持供能；每次翻页先完全断开射频场再重新供能并完整传输，不再预传。");
         body.addView(dryHoldHint);
+        TextView chargeLabel = Ui.text(this, 13, Ui.themeMuted(this), false);
+        chargeLabel.setText("刷新前充能（仅保场模式）：传图后、刷新前保持贴合不发指令，让屏幕储能更足；刷新只闪一两下就停时调长。");
+        body.addView(chargeLabel);
+        int[] chargeValues = {0, 5000, 10000, 20000};
+        Spinner charge = spinner(new String[]{"关闭", "5 秒", "10 秒", "20 秒"});
+        int savedCharge = prefs.getInt("panel-charge-ms", 10000);
+        for (int i = 0; i < chargeValues.length; i++) if (chargeValues[i] == savedCharge) charge.setSelection(i);
+        charge.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                prefs.edit().putInt("panel-charge-ms", chargeValues[position]).apply();
+            }
+
+            @Override public void onNothingSelected(AdapterView<?> parent) {
+            }
+        });
+        body.addView(charge);
         Button check = Ui.button(this, "检查 Shizuku 与 NFC");
         check.setOnClickListener(v -> checkShizuku());
         body.addView(check);

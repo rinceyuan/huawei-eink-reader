@@ -77,7 +77,8 @@ public final class PanelShizukuService extends Binder {
         }
         data.enforceInterface(TOKEN);
         if (code == 1) {
-            start(data.readInt());
+            int holdMs = data.readInt();
+            start(holdMs, data.readInt());
             reply.writeNoException();
             return true;
         }
@@ -107,10 +108,11 @@ public final class PanelShizukuService extends Binder {
         return true;
     }
 
-    private void start(int holdMs) {
+    private void start(int holdMs, int chargeMs) {
         if (holdMs != 0 && (holdMs < 1000 || holdMs > 30000)) {
             throw new IllegalArgumentException("保场参数错误");
         }
+        if (chargeMs < 0 || chargeMs > 20000) throw new IllegalArgumentException("充能参数错误");
         // The system presence check would interrupt a dry hold, so delay it past the hold.
         int presenceMs = holdMs > 0 ? holdMs + 10000 : 5000;
         synchronized (lock) {
@@ -130,7 +132,7 @@ public final class PanelShizukuService extends Binder {
                         "/system/bin/app_process", "/system/bin",
                         "org.nfcresearch.qpolllab.ReaderPanelWorker",
                         "45", stopFile.getAbsolutePath(), workDir.getAbsolutePath(),
-                        Integer.toString(presenceMs))
+                        Integer.toString(presenceMs), Integer.toString(chargeMs))
                         .redirectErrorStream(true);
                 // Resolve per session: a reinstall moves the APK while this service may survive.
                 builder.environment().put("CLASSPATH", applicationInfo().sourceDir);
@@ -172,7 +174,7 @@ public final class PanelShizukuService extends Binder {
         if (operation != 1 && operation != 2) throw new IllegalArgumentException("操作类型错误");
         if (id == null || id.isEmpty() || id.length() > 48) throw new IllegalArgumentException("命令编号错误");
         if (image == null || image.length != 105984) throw new IllegalArgumentException("图像长度错误");
-        if (!"A0".equals(panelType) && !"A1".equals(panelType)) {
+        if (!"A0".equals(panelType) && !"A1".equals(panelType) && !"A0X".equals(panelType)) {
             throw new IllegalArgumentException("屏幕型号错误");
         }
         if (powerMs < 100 || powerMs > 12700 || powerMs % 100 != 0
