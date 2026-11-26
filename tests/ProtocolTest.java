@@ -15,7 +15,7 @@ public final class ProtocolTest {
     static void rejects(Action action,String message)throws Exception{try{action.run();throw new AssertionError("Expected rejection: "+message);}catch(AssertionError e){throw e;}catch(Exception expected){}}
     static final class Fake implements PanelProtocol.Control,PanelProtocol.Transport {
         long time,cancelAt=-1;int d3,d4,de,pin,d8,d1,failD3=-1,cancelAtD3=-1,pollMs=500,deLatencyMs,d4Busy;
-        boolean authNeeded,failPin,failD4,noBusy,foreverBusy,malformedBusy,cancel,cancelBeforeD4,cancelWhilePolling;
+        boolean authNeeded,failPin,failSecondPin,failD4,noBusy,foreverBusy,malformedBusy,cancel,cancelBeforeD4,cancelWhilePolling;
         byte[] info=INFO;
         ArrayList<String> events=new ArrayList<>();ArrayList<byte[]> uploads=new ArrayList<>();
         ArrayList<Long> deTimes=new ArrayList<>();
@@ -27,7 +27,7 @@ public final class ProtocolTest {
             switch(cmd[1]&255){
                 case 0xD1:d1++;return info;
                 case 0xD8:d8++;return authNeeded&&pin==0?PanelProtocol.hex("6985"):OK;
-                case 0x20:pin++;eq(PanelProtocol.toHex(cmd).equals("00200001055265699919"),"published PIN APDU");return failPin?PanelProtocol.hex("63C2"):OK;
+                case 0x20:pin++;eq(PanelProtocol.toHex(cmd).equals("00200001055265699919"),"published PIN APDU");return failPin||(failSecondPin&&pin==2)?PanelProtocol.hex("63C2"):OK;
                 case 0xD3:d3++;uploads.add(cmd.clone());if(d3==cancelAtD3)cancel=true;return d3==failD3?PanelProtocol.hex("6995"):OK;
                 case 0xD4:d4++;eq(PanelProtocol.toHex(cmd).equals("F0D4948000"),"D4 power timing");if(d4<=d4Busy)return PanelProtocol.hex("6986");return failD4?PanelProtocol.hex("6502"):OK;
                 case 0xDE:deTimes.add(time);time+=deLatencyMs;de++;if(malformedBusy)return PanelProtocol.hex("029000");return PanelProtocol.hex((foreverBusy||(!noBusy&&de<=2))?"019000":"009000");
@@ -77,6 +77,7 @@ public final class ProtocolTest {
             else{eq(count==250,"non-final application stride remains 250");sub++;}}
         eq(blocks==53&&good.d3==53&&current.size()==0,"53 complete compressed LZO blocks");passed("53 compressed D3 packets / one D4 / busy to idle");
         Fake auth=new Fake();auth.authNeeded=true;auth.run();eq(auth.pin==2&&auth.d8==2,"default PIN verified twice around the D8 recheck");passed("conditional PIN verification follows the reference flow");
+        Fake second=new Fake();second.authNeeded=true;second.failSecondPin=true;second.run();eq(second.pin==2&&second.d4==1&&second.emitted("PIN_SECOND"),"rejected second PIN is logged, not fatal");passed("second PIN is best effort");
         Fake pinBad=new Fake();pinBad.authNeeded=true;pinBad.failPin=true;rejects(pinBad::run,"PIN failure");eq(pinBad.pin==1&&pinBad.d3+pinBad.d4==0,"PIN is not retried");passed("PIN failure stops without guessing");
         Fake uploadBad=new Fake();uploadBad.failD3=3;rejects(uploadBad::run,"D3 failure");eq(uploadBad.d3==3&&uploadBad.d4==0,"failed D3 not retried and no D4");passed("upload failure stops before refresh");
         Fake refreshBad=new Fake();refreshBad.failD4=true;rejects(refreshBad::run,"D4 failure");eq(refreshBad.d4==1&&refreshBad.de==0,"D4 not replayed");passed("D4 error is never replayed");

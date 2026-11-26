@@ -419,7 +419,8 @@ public final class ReaderPanelWorker {
         reader(0x81);
         resumePolling();
         if (!awaitDiscovery(stop, seen, 15000)) {
-            throw new IllegalStateException("重新供能后未发现墨水屏；请保持贴合后重新连接");
+            // IOException so the caller's reconnect budget retries another field cycle.
+            throw new IOException("重新供能后未发现墨水屏；请保持贴合");
         }
         connect(detectedTag);
     }

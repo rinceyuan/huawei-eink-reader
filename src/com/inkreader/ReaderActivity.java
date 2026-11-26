@@ -506,7 +506,7 @@ public final class ReaderActivity extends Activity implements PanelClient.Listen
     private void startPanel() {
         String panelType = Ui.prefs(this).getString("panel-type", "");
         if (panelType.isEmpty()) {
-            Toast.makeText(this, "请先在设置中选择 A0 或 A1 屏幕型号", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "请先在设置中选择屏幕型号（A0、A1 或 A0X）", Toast.LENGTH_LONG).show();
             startActivityForResult(new Intent(this, SettingsActivity.class), REQUEST_SETTINGS);
             return;
         }

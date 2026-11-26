@@ -12,7 +12,7 @@ public enum PanelType {
         if("A0".equals(value))return A0;
         if("A1".equals(value))return A1;
         if("A0X".equals(value))return A0X;
-        throw new IllegalArgumentException("请先选择屏幕类型 A0 或 A1");
+        throw new IllegalArgumentException("请先选择屏幕类型 A0、A1 或 A0X");
     }
     /** Controller row that receives logical source row {@code row}. */
     int target(int row) {

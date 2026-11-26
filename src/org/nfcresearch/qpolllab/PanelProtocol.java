@@ -276,7 +276,9 @@ public final class PanelProtocol {
             exchange(D8,"D8 再次检查",5000,true);
             // As in the reference PN532 flow (and HBWuChang's SN220 / APPID 00000001
             // findings), verify the same PIN again; without it D4 lost the tag there.
-            exchange(PIN,"验证已公开的默认 PIN（第二次）",5000,true);
+            // Best effort: boards that do not expect it must not lose the session over it.
+            int second=status(exchange(PIN,"验证已公开的默认 PIN（第二次）",5000,false));
+            if(second!=0x9000)control.event("PIN_SECOND","第二次 PIN 返回 SW="+String.format("%04X",second)+"，已忽略");
         } else requireOk(access,"D8 权限查询");
         // Check the same factory profile again; no DB/DA configuration writes exist here.
         Info rechecked=parseInfo(exchange(D1,"D1 写入前复核",5000,true));

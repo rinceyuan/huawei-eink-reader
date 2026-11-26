@@ -150,7 +150,7 @@ public final class SettingsActivity extends Activity {
         body.addView(fontWeight);
 
         section(body, "阅读背景");
-        Spinner theme = spinner(new String[]{"跟随系统深色模式", "纸张日间", "夜间", "护眼绿"});
+        Spinner theme = spinner(new String[]{"跟随系统（日间 / 夜间）", "纸张日间", "夜间", "护眼绿"});
         String savedTheme = prefs.getString("theme", "system");
         theme.setSelection("paper".equals(savedTheme) ? 1 : "night".equals(savedTheme) ? 2
                 : "eye".equals(savedTheme) ? 3 : 0);
